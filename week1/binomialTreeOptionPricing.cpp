@@ -1,9 +1,12 @@
-#include <iostream>
-using namespace std;
+#include <iostream> // cout 
 #include <iomanip> // For formatting output
-#include <vector>
+#include <vector> 
 #include <cmath>
 #include <iostream>
+#include <matplot/matplot.h> // ploting
+#include <boost/math/distributions/normal.hpp> // distributions
+
+using namespace std;
 
 // Templated class for Triangle (supports int, float, etc.)
 template <typename T>
@@ -44,7 +47,8 @@ public:
 
     void prettyPrint() const {
         int index = 0;
-        int maxWidth = 6 * levels + 3* levels; // Controls spacing for alignment
+        // Width of the last row
+        int maxWidth = 6 * levels + 3* levels;
     
         for (int L = 0; L < levels; L++) {
             int numElements = L + 1;
@@ -66,7 +70,7 @@ public:
     }
 };
 
-float binomialTreeEuropeOptionPricing(float sigma, float direction, int steps, int time, float interestRate, float strike, float intialStockPrice, int putOrCall) {
+float binomialTreeEuropeOptionPricing(float sigma, float direction, int steps, int time, float interestRate, float strike, float initialStockPrice, int putOrCall) {
     const double EulerConstant = std::exp(1.0);
     // Calculate p, u and d
     float deltaTime = (float)time/steps;
@@ -84,32 +88,24 @@ float binomialTreeEuropeOptionPricing(float sigma, float direction, int steps, i
 
     // calculate p
     float probability = (pow(EulerConstant,interestRate*deltaTime)-d)/(u-d);
-
-    cout << "Delta time " << deltaTime << "\n";
-    cout << "u " << u << "\n";
-    cout << "d " << d << "\n";
-    cout << "probability " << probability << "\n";
     
     // Create price tree
     Triangle<float> stockPrices(steps);
     for (int i=0; i<steps;i++) {
         for (int j=0; j<=i; j++) {
-            float val = intialStockPrice*pow(u,j)*pow(d,i-j);
+            float val = initialStockPrice*pow(u,j)*pow(d,i-j);
             stockPrices.set(i,j,val); 
         };
     }
-    stockPrices.prettyPrint();
 
     // Solve option price values
     Triangle<float> optionValue(steps);
     // Solve the final "row"
     // For call -> V(j,m) = max(S(j,m)-strike,0)
     for (int i = 0; i<steps;i++) {
-        cout << "Price of s j= " << i << " m = " << steps << " is " << stockPrices.get(steps-1,i) << "\n";
         float val = max(stockPrices.get(steps-1,i)-strike,0.0F);
         optionValue.set(steps-1,i,val); 
     }
-    optionValue.prettyPrint();
 
     // backwards traverse and populate prices
     for (int i=steps-2; i>=0;i--) {
@@ -119,13 +115,58 @@ float binomialTreeEuropeOptionPricing(float sigma, float direction, int steps, i
             optionValue.set(i,j,val); 
         };
     }
-    optionValue.prettyPrint();
     return optionValue.get(0,0);
 }
 
+float blackScholes(float sigma, float time, float interestRate, float strike, float initialStockPrice, int putOrCall) {
+    boost::math::normal_distribution<> norm(0.0, 1.0);  // Standard normal
+
+    float d1 = (std::log(initialStockPrice / strike) + (interestRate + 0.5f * sigma * sigma) * time) / (sigma * std::sqrt(time));
+    float d2 = d1 - sigma * std::sqrt(time);
+
+    float discountedStrike = strike * std::exp(-interestRate * time);
+
+    float callPrice = initialStockPrice * boost::math::cdf(norm, d1) - discountedStrike * boost::math::cdf(norm, d2);
+
+    if (putOrCall == 1) {
+        // Call option
+        return callPrice;
+    } else {
+        // Put option
+        float putPrice = discountedStrike * boost::math::cdf(norm, -d2) - initialStockPrice * boost::math::cdf(norm, -d1);
+        return putPrice;
+    }
+}
+
 int main(int argc, char* argv[]) {
-    cout << "Hello world\n";
-    float price = binomialTreeEuropeOptionPricing(0.2,1,50,1,.05,3,5,1);
-    cout << "call option price" << price;
+    std::vector<int> timeSteps = {};
+    std::vector<float> optionPrices = {};
+    // Plot option pricing method for 1 to 200 time steps (time delta 1/1 to 1/200)
+    int maxSteps = 200;
+    float sigma = 0.2;
+    float direction = 1;
+    int time = 1;
+    float interestRate = 0.05;
+    float strike = 3;
+    float initialStockPrice = 5;
+    int putOrCall = 1;
+    for (int i = 1; i<=maxSteps;i++){
+        float optionPrice = binomialTreeEuropeOptionPricing(sigma,direction,i,time,interestRate,strike,initialStockPrice,putOrCall);
+        cout << "number of steps : "<< i << " price : " << optionPrice << "\n";
+        timeSteps.push_back(i);
+        optionPrices.push_back(optionPrice);
+    }
+    float blackScholesOptionPrice = blackScholes(sigma,time,interestRate,strike,initialStockPrice,putOrCall);
+    matplot::figure()->size(1920,1080);
+    matplot::plot(timeSteps, optionPrices);
+    matplot::hold(matplot::on);   
+    auto bs_line = matplot::plot({timeSteps.front(), timeSteps.back()}, {blackScholesOptionPrice, blackScholesOptionPrice});
+    bs_line->line_style("--");
+    bs_line->color("red");
+    bs_line->line_width(2);
+    matplot::title("Binomial Pricing");
+    matplot::xlabel("M-time steps");
+    matplot::ylabel("Option prices");
+    matplot::save("plot.png");
     return 1;
 }
