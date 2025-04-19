@@ -160,13 +160,14 @@ int main(int argc, char* argv[]) {
     matplot::figure()->size(1920,1080);
     matplot::plot(timeSteps, optionPrices);
     matplot::hold(matplot::on);   
-    auto bs_line = matplot::plot({timeSteps.front(), timeSteps.back()}, {blackScholesOptionPrice, blackScholesOptionPrice});
+    auto bs_line = matplot::plot({(double)timeSteps.front(), (double)timeSteps.back()}, {blackScholesOptionPrice, blackScholesOptionPrice});
     bs_line->line_style("--");
     bs_line->color("red");
     bs_line->line_width(2);
     matplot::title("Binomial Pricing");
     matplot::xlabel("M-time steps");
     matplot::ylabel("Option prices");
+    matplot::show();
     matplot::save("plot.png");
     return 1;
 }
